@@ -3,28 +3,18 @@ project(bibletime-win)
 cmake_minimum_required(VERSION 3.17)
 include(ExternalProject)
 Set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
-Set(BT_DOC_REV v3.1.1)
+Set(BT_DOC_REV v3.2.0)
 Set(PROJECT_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/install)
 
 
 
-ExternalProject_Add(
-    icu
-    #URL https://github.com/unicode-org/icu/releases/download/release-76-1/icu4c-76_1-Win64-MSVC2022.zip
-    URL https://github.com/unicode-org/icu/releases/download/release-74-2/icu4c-74_2-Win64-MSVC2019.zip
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/include" "${PROJECT_INSTALL_DIR}/include"
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/bin64" "${PROJECT_INSTALL_DIR}/bin"
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/lib64" "${PROJECT_INSTALL_DIR}/lib"
-)
 
 
 
 ExternalProject_Add(
     zlib
-    URL https://github.com/madler/zlib/archive/v1.2.10.zip
+    URL https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz
+    URL_HASH SHA512=cf3d49fbabddc57cca99858feeca8f910e9de42a16014cddd406814d2d24ee33fee2af3805d7efbb1b04b05f55818092b000daf82502b675df65f2512c353f73
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
         -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
@@ -40,11 +30,13 @@ Set(zlib_INCLUDE_DIR ${PROJECT_INSTALL_DIR}/include)
 
 ExternalProject_Add(
     curl
-    URL https://github.com/curl/curl/releases/download/curl-7_70_0/curl-7.70.0.zip
+    URL https://github.com/curl/curl/releases/download/curl-8_21_0/curl-8.21.0.tar.xz
+    URL_HASH SHA512=5f7c646e5a3d4d3d8b8a3675adfa29c266a3148599d510d24f91c82d6ff064bfafce420af01522f8be973019619f3eee5e970398fa79be168b77f697c52bf8e5
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
         -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
         -DBUILD_CURL_EXE=OFF
+        -DCURL_USE_LIBPSL=OFF
     CMAKE_CACHE_ARGS=
         "-DCMAKE_CXX_FLAGS=-Zc:wchar_t -DCMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
         -DCMAKE_BUILD_TYPE=Release
@@ -71,6 +63,17 @@ Set(clucene_SOURCE_DIR ${SOURCE_DIR})
 ExternalProject_Get_Property(clucene BINARY_DIR)
 Set(clucene_BINARY_DIR ${BINARY_DIR})
 
+ExternalProject_Add(
+    icu
+    URL https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-Win64-MSVC2022.zip
+    URL_HASH SHA512=32c7b8c3581b0eed51e13bfd1c723122c5ae154fe5662000f51fa68d8ff8a633802804944963e96c79f839a360cba413ce7c6144e422da707add1b4290935889
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND
+	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/include" "${PROJECT_INSTALL_DIR}/include"
+	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/bin64" "${PROJECT_INSTALL_DIR}/bin"
+	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/lib64" "${PROJECT_INSTALL_DIR}/lib"
+)
 
 
 ExternalProject_Add(
@@ -87,6 +90,8 @@ ExternalProject_Add(
         -DSWORD_NO_BZIP2=Yes
         -DCURL_INCLUDE_DIR="${PROJECT_INSTALL_DIR}"
         -DCURL_LIBRARY=${PROJECT_INSTALL_DIR}/lib/libcurl_imp.lib
+        -DCMAKE_CXX_STANDARD=17
+        -DCMAKE_CXX_STANDARD_REQUIRED=ON
     CMAKE_CACHE_ARGS=
 	-DSWORD_SWIG_BINDINGS=OFF
 	-DSWORD_BUILD_UTILS=No
@@ -121,13 +126,17 @@ MESSAGE(STATUS  "docs: ${bibletime-docs_SOURCE_DIR}" )
 
 ExternalProject_Add(
     bibletime
-    GIT_REPOSITORY https://github.com/bibletime/bibletime.git
-    GIT_TAG 9b6b5fef799ca654352e5efa6fe6a0af6fbbfe37
+    GIT_REPOSITORY https://github.com/jaakristioja/bibletime.git
+    GIT_TAG e9496978f548e16b9baf02c9617031bb1381280b
+    UPDATE_DISCONNECTED TRUE
 
     #SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../bibletime
     #GIT_TAG ${GIT_BRANCH_OR_TAG}
     #GIT_TAG master
     #URL https://github.com/bibletime/bibletime/archive/v3.1.1.zip
+
+    CONFIGURE_ENVIRONMENT_MODIFICATION
+        "PKG_CONFIG_PATH=set:$ENV{PKG_CONFIG_PATH}"
 
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}

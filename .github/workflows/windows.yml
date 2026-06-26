@@ -7,29 +7,51 @@ name: Windows CI
 #     zlib, curl, clucene, sword, and bibletime
 
 on:
-  repository_dispatch:
   workflow_dispatch:
-
+  push:
+    branches:
+      - 'master'
+      - 'stable-*'
+  pull_request:
+    branches:
+      - 'master'
+      - 'stable-*'
 env:
-  BT_VERSION: 3.0.2
-  QT_VERSION: 5.15.2
+  BT_VERSION: 3.2.0
+  QT_VERSION: 6.12.0
 
 jobs:
   Windows:
     name: build-windows
-    runs-on: [windows-2019]
+    runs-on: [windows-2022]
 
     steps:
+    - name: Show Environment
+      run: |
+        env
+        Get-Location
+
+    - name: Install pkgconf
+      run: |
+        $vcpkg = Join-Path "${env:VCPKG_INSTALLATION_ROOT}" 'vcpkg.exe'
+        $tools = Join-Path "${env:VCPKG_INSTALLATION_ROOT}" installed x64-windows tools
+        & "${vcpkg}" install pkgconf
+        $pkgconf_path = Join-Path "${tools}" pkgconf
+        "${pkgconf_path}" >> "${env:GITHUB_PATH}"
+
     - name: Checkout
       uses: actions/checkout@v2
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v2
+      uses: jurplel/install-qt-action@v4
       with:
+        # The current latest release used (3.3.0) does not support Qt >= 6.11
+        aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@bbfb1f7c0590b9eb3fa91356e75bb64fb15d3643'
         version: ${{ env.QT_VERSION }}
+        modules: 'qtmultimedia qtspeech'
         host: 'windows'
         target: 'desktop'
-        arch: 'win64_msvc2019_64'
+        arch: 'win64_msvc2022_64'
 
     - name: Install NSIS
       run: choco install nsis
@@ -39,27 +61,24 @@ jobs:
         cd ${{ github.workspace }}
         mkdir build
         cd build
+        $env:PKG_CONFIG_PATH = Join-Path "$((Get-Location).Path)" install lib pkgconfig
+        "PKG_CONFIG_PATH=${env:PKG_CONFIG_PATH}" >> "${env:GITHUB_ENV}"
         cmake ..
 
     - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.3
+      uses: microsoft/setup-msbuild@v3
 
 
     - name: Build BibleTime Installer
       run: |
+        env
         cd build
-        "c:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary/Build\vcvars64.bat"
-        MSBuild.exe  /p:Configuration=Release /p:Platform=x64 bibletime-win.sln
+        "c:\Program Files (x86)\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary/Build\vcvars64.bat"
+        MSBuild.exe /maxCpuCount /verbosity:diagnostic /property:Configuration=Release /property:Platform=x64 bibletime-win.sln
 
     - name: Save BibleTime Installer
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v7
       with:
         name: bibletime-x64-installer
         path: build\bibletime-prefix\src\bibletime-build\BibleTime-${{env.BT_VERSION}}-win64.exe
         retention-days: 5
-
-    - name: Show Environment
-      run: |
-        env
-        Get-Location
-
