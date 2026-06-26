@@ -10,7 +10,7 @@ Also see the .github/workflows/windows.yml file
 Manual Build
 
 This project uses a cmake script to create a build system for Microsoft Visual Studio.
-It will build BibleTime and create an install package. 
+It will build BibleTime and create an install package.
 
 
 Installed Requirements:
@@ -36,7 +36,7 @@ Build steps
      "c:\Program Files\Microsoft Visual Studio\2022\Community\vc\Auxiliary/Build\vcvars64.bat"
 
 6. From the "build" directory run init64.bat like this:
-  ..\bibletime-win\init64.bat   (edit init64.bat if necessary to change compilers or paths) 
+  ..\bibletime-win\init64.bat   (edit init64.bat if necessary to change compilers or paths)
 
 7. Run either of the following commands to build the windows installer.
 
