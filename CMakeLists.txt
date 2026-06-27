@@ -8,109 +8,6 @@ Set(PROJECT_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/install)
 
 
 
-
-
-
-ExternalProject_Add(
-    zlib
-    URL https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz
-    URL_HASH SHA512=cf3d49fbabddc57cca99858feeca8f910e9de42a16014cddd406814d2d24ee33fee2af3805d7efbb1b04b05f55818092b000daf82502b675df65f2512c353f73
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
-        -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
-        -DCMAKE_BUILD_TYPE=Release
-    CMAKE_CACHE_ARGS=
-	"-DCMAKE_CXX_FLAGS=-Zc:wchar_t -DCMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
-)
-ExternalProject_Get_Property(zlib BINARY_DIR)
-Set(zlib_BINARY_DIR ${BINARY_DIR})
-Set(zlib_INCLUDE_DIR ${PROJECT_INSTALL_DIR}/include)
-
-
-
-ExternalProject_Add(
-    curl
-    URL https://github.com/curl/curl/releases/download/curl-8_21_0/curl-8.21.0.tar.xz
-    URL_HASH SHA512=5f7c646e5a3d4d3d8b8a3675adfa29c266a3148599d510d24f91c82d6ff064bfafce420af01522f8be973019619f3eee5e970398fa79be168b77f697c52bf8e5
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
-        -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
-        -DBUILD_CURL_EXE=OFF
-        -DCURL_USE_LIBPSL=OFF
-    CMAKE_CACHE_ARGS=
-        "-DCMAKE_CXX_FLAGS=-Zc:wchar_t -DCMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
-        -DCMAKE_BUILD_TYPE=Release
-)
-
-
-
-ExternalProject_Add(
-    clucene
-      #  Fork of https://downloads.sourceforge.net/clucene/clucene-core-2.3.3.4.tar.gz
-    GIT_REPOSITORY https://github.com/bibletime/clucene-win.git
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
-        -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
-        -DDISABLE_MULTITHREADING=OFF
-    CMAKE_CACHE_ARGS=
-          -DZLIB_INCLUDE_DIR=${zlib_INCLUDE_DIR}
-        "-DCMAKE_CXX_FLAGS=-Zc:wchar_t -DCMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
-        -DCMAKE_BUILD_TYPE=Release
-    DEPENDS zlib
-)
-ExternalProject_Get_Property(clucene SOURCE_DIR)
-Set(clucene_SOURCE_DIR ${SOURCE_DIR})
-ExternalProject_Get_Property(clucene BINARY_DIR)
-Set(clucene_BINARY_DIR ${BINARY_DIR})
-
-ExternalProject_Add(
-    icu
-    URL https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-Win64-MSVC2022.zip
-    URL_HASH SHA512=32c7b8c3581b0eed51e13bfd1c723122c5ae154fe5662000f51fa68d8ff8a633802804944963e96c79f839a360cba413ce7c6144e422da707add1b4290935889
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/include" "${PROJECT_INSTALL_DIR}/include"
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/bin64" "${PROJECT_INSTALL_DIR}/bin"
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_BINARY_DIR}/icu-prefix/src/icu/lib64" "${PROJECT_INSTALL_DIR}/lib"
-)
-
-
-ExternalProject_Add(
-    sword
-      #URL http://crosswire.org/ftpmirror/pub/sword/source/v1.8/sword-1.8.1.tar.gz
-      #URL http://crosswire.org/ftpmirror/pub/sword/source/v1.9/sword-1.9.0.tar.gz
-      #GIT_REPOSITORY https://github.com/bibletime/sword-win.git
-    GIT_REPOSITORY https://github.com/bibletime/sword-1.9.0-win.git
-      #SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../sword
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
-        -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
-        -DLIBSWORD_LIBRARY_TYPE=Shared
-        -DSWORD_NO_BZIP2=Yes
-        -DCURL_INCLUDE_DIR="${PROJECT_INSTALL_DIR}"
-        -DCURL_LIBRARY=${PROJECT_INSTALL_DIR}/lib/libcurl_imp.lib
-        -DCMAKE_CXX_STANDARD=17
-        -DCMAKE_CXX_STANDARD_REQUIRED=ON
-    CMAKE_CACHE_ARGS=
-	-DSWORD_SWIG_BINDINGS=OFF
-	-DSWORD_BUILD_UTILS=No
-	-DSWORD_BUILD_EXAMPLES=OFF
-	-DSWORD_BUILD_TESTS=OFF
-        "-DCMAKE_CXX_FLAGS=-Zc:wchar_t -DCMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
-        -DCLucene_INCLUDE_DIR=${clucene_SOURCE_DIR}/src/core
-	-DCLucene_LIBRARY_DIR=${PROJECT_INSTALL_DIR}/include
-        -DCLucene_LIBRARY=${clucene_BINARY_DIR}/bin/Release/clucene-core.lib
-        -DCMAKE_BUILD_TYPE=Release
-    DEPENDS curl zlib clucene icu
-)
-ExternalProject_Get_Property(sword SOURCE_DIR)
-Set(sword_SOURCE_DIR ${SOURCE_DIR})
-ExternalProject_Get_Property(sword BINARY_DIR)
-Set(sword_BINARY_DIR ${BINARY_DIR})
-
-
-
 ExternalProject_Add(
     bibletime-docs
     GIT_REPOSITORY https://github.com/bibletime/generated_docs.git
@@ -130,47 +27,31 @@ ExternalProject_Add(
     GIT_TAG e9496978f548e16b9baf02c9617031bb1381280b
     UPDATE_DISCONNECTED TRUE
 
-    #SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../bibletime
-    #GIT_TAG ${GIT_BRANCH_OR_TAG}
-    #GIT_TAG master
-    #URL https://github.com/bibletime/bibletime/archive/v3.1.1.zip
-
     CONFIGURE_ENVIRONMENT_MODIFICATION
         "PKG_CONFIG_PATH=set:$ENV{PKG_CONFIG_PATH}"
 
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${PROJECT_INSTALL_DIR}
         -DCMAKE_PREFIX_PATH=${PROJECT_INSTALL_DIR}
-	-DBUILD_HANDBOOK_HTML=OFF
-	-DBUILD_HANDBOOK_PDF=OFF
-	-DBUILD_HOWTO_HTML=OFF
-	-DBUILD_HOWTO_PDF=OFF
-	-DINSTALL_GENERATED_DOCS=ON
-    CMAKE_ARGS -D CMAKE_BUILD_TYPE=Release
-    CMAKE_CACHE_ARGS=
-	"-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} /UMBCS /D_UNICODE /DUNICODE"
-        -DGENERATED_DOCS_DIR=${bibletime-docs_SOURCE_DIR}/docs/${BT_DOC_REV}
-	-DCMAKE_PREFIX_PATH=${Qt_PREFIX}
-	-DFindSword_LIBS=${sword_BINARY_DIR}/Release/sword.lib
-	-DFindSword_INCS=${PROJECT_INSTALL_DIR}/include
-        -DCLucene_SHARED_LIB=${clucene_BINARY_DIR}/bin/Release/clucene-shared.lib
-        -DCLucene_INCLUDE_DIR=${clucene_SOURCE_DIR}/src/core
-	-DCLucene_LIBRARY_DIR=${PROJECT_INSTALL_DIR}/include
-        -DCLucene_LIBRARY=${clucene_BINARY_DIR}/bin/Release/clucene-core.lib
-	-DCURL_LIBRARY=${PROJECT_INSTALL_DIR}/bin/libcurl.dll
-	-DZLIB_LIBRARY_RELEASE=${zlib_BINARY_DIR}/Release/zlib.dll
-	-DQT_WINDEPLOYQT_EXECUTABLE=${Qt_PREFIX}/bin/windeployqt.exe
-	#-DPKG_CONFIG_EXECUTABLE:FILEPATH=C:/bibletime/windows/pkg-config-lite-0.28-1/bin/pkg-config.exe
-	-DMSVC_REDIST=${MSVC_REDIST}
+        -DBUILD_HANDBOOK_HTML=OFF
+        -DBUILD_HANDBOOK_PDF=OFF
+        -DBUILD_HOWTO_HTML=OFF
+        -DBUILD_HOWTO_PDF=OFF
+        -DINSTALL_GENERATED_DOCS=ON
         -DCMAKE_BUILD_TYPE=Release
-	-DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES}
+        -DGENERATED_DOCS_DIR=${bibletime-docs_SOURCE_DIR}/docs/${BT_DOC_REV}
+        -DCMAKE_PREFIX_PATH=${Qt_PREFIX}
+        -DQT_WINDEPLOYQT_EXECUTABLE=${Qt_PREFIX}/bin/windeployqt.exe
+        -DMSVC_REDIST=${MSVC_REDIST}
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_CONFIGURATION_TYPES=${CMAKE_CONFIGURATION_TYPES}
     INSTALL_COMMAND
         ${CMAKE_COMMAND} --build . --config Release --target install
-        COMMAND ${CMAKE_COMMAND} --build . --config Release --target PACKAGE
-    DEPENDS sword clucene zlib curl bibletime-docs icu
+    COMMAND
+        ${CMAKE_COMMAND} --build . --config Release --target PACKAGE
+    DEPENDS bibletime-docs
 )
 Link_Directories(${CMAKE_BINARY_DIR}/install/lib)
 
 MESSAGE(STATUS  "Qt: ${Qt_PREFIX}" )
 MESSAGE(STATUS  "Microsoft Redist: ${MSVC_REDIST}" )
-

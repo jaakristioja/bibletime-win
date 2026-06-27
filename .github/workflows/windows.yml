@@ -1,13 +1,19 @@
 name: Windows CI
 
-# Workflow for building BibleTime for Windows
-#
-# cmake is used to checkout, configure, and build
-# the following projects
-#     zlib, curl, clucene, sword, and bibletime
-
 on:
   workflow_dispatch:
+    inputs:
+      msbuildVerbosity:
+        description: 'MSBuild.exe verbosity'
+        required: true
+        default: 'normal'
+        type: 'choice'
+        options:
+        - 'quiet'
+        - 'minimal'
+        - 'normal'
+        - 'detailed'
+        - 'diagnostic'
   push:
     branches:
       - 'master'
@@ -18,7 +24,9 @@ on:
       - 'stable-*'
 env:
   BT_VERSION: 3.2.0
+  BT_DOC_REV: v3.2.0
   QT_VERSION: 6.12.0
+  VCPKG_DEFAULT_TRIPLET: x64-windows-release
 
 jobs:
   Windows:
@@ -27,58 +35,195 @@ jobs:
 
     steps:
     - name: Show Environment
+      id: env
       run: |
-        env
-        Get-Location
+        env | Tee-Object -FilePath "${env:GITHUB_OUTPUT}" -Append
 
-    - name: Install pkgconf
+    - name: Restore vcpkg cache
+      id: cache-restore-vcpkg
+      uses: actions/cache/restore@v6
+      with:
+        path: "vcpkg-binary-cache"
+        key: "vcpkg-binary-cache"
+
+    - name: Install dependencies from vcpkg
       run: |
+        $env:VCPKG_DEFAULT_BINARY_CACHE = `
+            Join-Path "${{ github.workspace }}" "vcpkg-binary-cache"
+        if (-not (Test-Path "${env:VCPKG_DEFAULT_BINARY_CACHE}")) {
+            mkdir "${env:VCPKG_DEFAULT_BINARY_CACHE}"
+        }
         $vcpkg = Join-Path "${env:VCPKG_INSTALLATION_ROOT}" 'vcpkg.exe'
-        $tools = Join-Path "${env:VCPKG_INSTALLATION_ROOT}" installed x64-windows tools
-        & "${vcpkg}" install pkgconf
+        $pkgs = $(
+          "curl[core,idn,ssl]"
+          "icu[core]"
+          "pkgconf"
+          "zlib"
+        )
+        & "${vcpkg}" install @pkgs
+
+        # Include pkgconf in PATH:
+        $tools = Join-Path "${env:VCPKG_INSTALLATION_ROOT}" `
+          installed x64-windows tools
         $pkgconf_path = Join-Path "${tools}" pkgconf
         "${pkgconf_path}" >> "${env:GITHUB_PATH}"
 
-    - name: Checkout
-      uses: actions/checkout@v2
+        # Include path to vcpkg CMake toolchain file in environment variable:
+        $vcpkg_toolchain_file = `
+          Join-Path "${env:VCPKG_INSTALLATION_ROOT}" `
+          scripts buildsystems vcpkg.cmake
+        "VCPKG_TOOLCHAIN_FILE=${vcpkg_toolchain_file}" >> "${env:GITHUB_ENV}"
+
+    - name: Save vcpkg cache
+      uses: actions/cache/save@v6
+      with:
+        path: "vcpkg-binary-cache"
+        key: ${{ steps.cache-restore-vcpkg.outputs.cache-primary-key }}
+
+    - name: vcpkg libraries
+      run: |
+        Get-ChildItem -Path "${env:VCPKG_INSTALLATION_ROOT}" -Filter "*.dll" -Recurse
+
+    - name: Checkout CLucene
+      uses: actions/checkout@v7
+      with:
+        repository: 'jaakristioja/clucene-win'
+        path: 'clucene'
+
+    - name: Build and install CLucene
+      run: |
+        mkdir "build.clucene", "install.clucene"
+        cmake -B build.clucene -S clucene `
+          "--toolchain" "${env:VCPKG_TOOLCHAIN_FILE}" `
+          "--install-prefix" (Resolve-Path "install.clucene").Path `
+          "-DCMAKE_BUILD_TYPE=Release" `
+          "-DVCPKG_TARGET_TRIPLET=${env:VCPKG_DEFAULT_TRIPLET}" `
+          "-DDISABLE_MULTITHREADING=OFF"
+        cmake --build build.clucene --config Release `
+            --parallel $([System.Environment]::ProcessorCount)
+        cmake --install build.clucene --config Release
+
+    - name: CLucene libraries
+      run: |
+        Get-ChildItem -Path install.clucene -Filter "*.dll" -Recurse
+
+    - name: Checkout SWORD
+      uses: actions/checkout@v7
+      with:
+        repository: 'bibletime/sword-1.9.0-win'
+        path: 'sword'
+
+    - name: Build and install SWORD
+      run: |
+        mkdir "build.sword", "install.sword"
+        cmake -B build.sword -S sword `
+          "--toolchain" "${env:VCPKG_TOOLCHAIN_FILE}" `
+          "--install-prefix" (Resolve-Path "install.sword").Path `
+          "-DCMAKE_BUILD_TYPE=Release" `
+          "-DVCPKG_TARGET_TRIPLET=${env:VCPKG_DEFAULT_TRIPLET}" `
+          "-DLIBSWORD_LIBRARY_TYPE=Shared" `
+          "-DSWORD_NO_BZIP2=Yes" `
+          "-DCMAKE_CXX_STANDARD=17" `
+          "-DCMAKE_CXX_STANDARD_REQUIRED=ON" `
+          "-DSWORD_SWIG_BINDINGS=OFF" `
+          "-DSWORD_BUILD_UTILS=No" `
+          "-DSWORD_BUILD_EXAMPLES=OFF" `
+          "-DSWORD_BUILD_TESTS=OFF"
+        cmake --build build.sword --config Release `
+            --parallel $([System.Environment]::ProcessorCount)
+        cmake --install build.sword --config Release
+
+    - name: SWORD libraries
+      run: |
+        Get-ChildItem -Path install.sword -Filter "*.dll" -Recurse
+
+    - name: Checkout bibletime generated docs
+      uses: actions/checkout@v7
+      with:
+        repository: 'bibletime/generated_docs'
+        ref: 'master'
+        path: 'bibletime-docs'
+
+    - name: Restore PIP cache
+      id: cache-restore-pip
+      uses: actions/cache/restore@v6
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: "pip-cache-${{ runner.os }}"
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        # The current latest release used (3.3.0) does not support Qt >= 6.11
+        # The current latest release used (3.3.0) does not yet support Qt 6.11+:
         aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@bbfb1f7c0590b9eb3fa91356e75bb64fb15d3643'
         version: ${{ env.QT_VERSION }}
         modules: 'qtmultimedia qtspeech'
         host: 'windows'
         target: 'desktop'
         arch: 'win64_msvc2022_64'
+        dir: '${{ github.workspace }}/install.qt'
+        cache: true
+
+    - name: Save PIP cache
+      uses: actions/cache/save@v6
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ steps.cache-restore-pip.outputs.cache-primary-key }}
+
+    - name: Qt libraries
+      run: |
+        Get-ChildItem -Path install.qt -Filter "*.dll" -Recurse
 
     - name: Install NSIS
       run: choco install nsis
 
-    - name: Running cmake
+    - name: Checkout bibletime
+      uses: actions/checkout@v7
+      with:
+        repository: 'jaakristioja/bibletime'
+        ref: 'stable-3.2'
+        fetch-depth: 0
+        path: 'bibletime'
+
+    - name: Build BibleTime
       run: |
-        cd ${{ github.workspace }}
-        mkdir build
-        cd build
-        $env:PKG_CONFIG_PATH = Join-Path "$((Get-Location).Path)" install lib pkgconfig
-        "PKG_CONFIG_PATH=${env:PKG_CONFIG_PATH}" >> "${env:GITHUB_ENV}"
-        cmake ..
+        mkdir "build.bibletime", "install.bibletime", "package.bibletime"
 
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v3
+        $docdir = Join-Path "bibletime-docs" "docs" "${env:BT_DOC_REV}"
+        $pwd = "$((Get-Location).Path)"
+        $env:PKG_CONFIG_PATH = $(
+          "${env:PKG_CONFIG_PATH}"
+          (Join-Path "${pwd}" install.clucene lib pkgconfig)
+          (Join-Path "${pwd}" install.sword lib pkgconfig)
+        ) -ne "" -join ";"
+        $depdirs = $(
+          (Join-Path "${pwd}" install.clucene lib)
+          (Join-Path "${pwd}" install.sword bin)
+          (Join-Path "${env:VCPKG_INSTALLATION_ROOT}" installed `
+            x64-windows-release bin)
+        ) -join ";"
+        cmake -B build.bibletime -S bibletime `
+          "--toolchain" "${env:VCPKG_TOOLCHAIN_FILE}" `
+          "--install-prefix" (Resolve-Path "install.bibletime").Path `
+          "-DCMAKE_BUILD_TYPE=Release" `
+          "-DVCPKG_TARGET_TRIPLET=${env:VCPKG_DEFAULT_TRIPLET}" `
+          "-DBUILD_HANDBOOK_HTML=OFF" `
+          "-DBUILD_HANDBOOK_PDF=OFF" `
+          "-DBUILD_HOWTO_HTML=OFF" `
+          "-DBUILD_HOWTO_PDF=OFF" `
+          "-DINSTALL_GENERATED_DOCS=ON" `
+          "-DGENERATED_DOCS_DIR=${docdir}" `
+          "-DRUNTIME_DEPENDENCY_SET_DIRECTORIES=${depdirs}"
+        cmake --build build.bibletime --config Release `
+            --parallel $([System.Environment]::ProcessorCount)
 
-
-    - name: Build BibleTime Installer
-      run: |
-        env
-        cd build
-        "c:\Program Files (x86)\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary/Build\vcvars64.bat"
-        MSBuild.exe /maxCpuCount /verbosity:diagnostic /property:Configuration=Release /property:Platform=x64 bibletime-win.sln
+        cpack --config "$(Join-Path build.bibletime CPackConfig.cmake)" `
+            -B package.bibletime --verbose
 
     - name: Save BibleTime Installer
       uses: actions/upload-artifact@v7
       with:
-        name: bibletime-x64-installer
-        path: build\bibletime-prefix\src\bibletime-build\BibleTime-${{env.BT_VERSION}}-win64.exe
+        path: package.bibletime\*.exe
+        if-no-files-found: error
+        archive: false
         retention-days: 5
